@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - target: 9090
+        published: 9090
+        mode: host
+    volumes:
+      - /home/etudiant/nebula/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - net-monitoring
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==manager
+
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - target: 3000
+        published: 3000
+        mode: host
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - net-monitoring
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==manager
+
+
+networks:
+  net-monitoring:
+    external: true
