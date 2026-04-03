@@ -1,5 +1,7 @@
 version: '3.8'
 services:
+
+  # ========== REVERSE PROXY ==========
   traefik:
     image: traefik:v2.11
     command:
@@ -24,6 +26,8 @@ services:
       placement:
         constraints:
           - node.labels.role==manager
+
+  # ========== API GATEWAY ==========
   api-gateway:
     image: 10.100.12.105:5000/api-gateway:v1
     networks:
@@ -33,27 +37,116 @@ services:
         - traefik.enable=true
         - traefik.http.routers.api.rule=PathPrefix(`/`)
         - traefik.http.services.api.loadbalancer.server.port=3000
+
+  # ========== USER SERVICE ==========
   user-service:
     image: 10.100.12.105:5000/user-service:v1
     networks:
       - net-public
+      - net-internal
     deploy: {}
+
+  # ========== POST SERVICE (3 replicas) ==========
   post-service:
     image: 10.100.12.105:5000/post-service:v1
     networks:
       - net-public
+      - net-internal
     deploy:
       replicas: 3
+
+  # ========== MEDIA SERVICE ==========
   media-service:
     image: 10.100.12.105:5000/media-service:v1
     networks:
       - net-public
+      - net-internal
     deploy: {}
+
+  # ========== NOTIFICATION SERVICE ==========
   notification-service:
     image: 10.100.12.105:5000/notification-service:v1
     networks:
       - net-public
+      - net-internal
     deploy: {}
+
+  # ========== POSTGRESQL ==========
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=nebula
+      - POSTGRES_PASSWORD=nebula_secret
+      - POSTGRES_DB=nebula
+    volumes:
+      - /home/etudiant/data/postgres:/var/lib/postgresql/data
+    networks:
+      - net-internal
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==data
+
+  # ========== RABBITMQ ==========
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=nebula
+      - RABBITMQ_DEFAULT_PASS=nebula_secret
+    volumes:
+      - /home/etudiant/data/rabbitmq:/var/lib/rabbitmq
+    ports:
+      - target: 15672
+        published: 15672
+        mode: host
+    networks:
+      - net-internal
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==data
+
+  # ========== MINIO (S3) ==========
+  minio:
+    image: minio/minio:RELEASE.2022-10-24T18-35-07Z
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=nebula
+      - MINIO_ROOT_PASSWORD=nebula_secret_key
+    volumes:
+      - /home/etudiant/data/minio:/data
+    ports:
+      - target: 9000
+        published: 9000
+        mode: host
+      - target: 9001
+        published: 9001
+        mode: host
+    networks:
+      - net-internal
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==data
+
+  # ========== REGISTRY ==========
+  registry:
+    image: registry:2
+    ports:
+      - target: 5000
+        published: 5000
+        mode: host
+    volumes:
+      - /home/etudiant/registry-data:/var/lib/registry
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==manager
+
 networks:
   net-public:
-    external: true
+    driver: overlay
+    attachable: true
+  net-internal:
+    driver: overlay
+    attachable: true
